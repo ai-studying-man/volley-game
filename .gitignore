@@ -1,0 +1,10 @@
+.vercel/
+node_modules/
+dist/
+.reference/
+.playwright-mcp/
+.vscode/
+*.png
+*.log
+.env
+.env.*

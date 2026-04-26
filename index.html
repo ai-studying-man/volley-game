@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#1d2f33" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>무한도전 6인 배구</title>
+  </head>
+  <body>
+    <div id="app">
+      <main id="game-shell">
+        <div id="game-root"></div>
+        <div id="hud" aria-live="polite">
+          <div class="score-pill">
+            <span id="p1-name">MC 메뚜기</span>
+            <strong id="score">0 : 0</strong>
+            <span id="p2-name">버럭 아저씨</span>
+          </div>
+          <button id="pause-button" class="icon-button" type="button" aria-label="Pause">
+            II
+          </button>
+        </div>
+        <section id="character-select" class="panel" aria-label="Character select">
+          <h1>무한도전 6인 배구</h1>
+          <section id="online-panel" aria-label="Online room">
+            <div class="room-actions">
+              <button id="create-room-button" type="button">방 만들기</button>
+              <div class="join-row">
+                <input
+                  id="room-code-input"
+                  type="text"
+                  inputmode="text"
+                  maxlength="6"
+                  placeholder="방 코드"
+                  autocomplete="off"
+                />
+                <button id="join-room-button" type="button">참가</button>
+              </div>
+            </div>
+            <div class="room-code-box">
+              <span>내 방 코드</span>
+              <strong id="room-code-value">------</strong>
+              <button id="copy-room-button" type="button" disabled>복사</button>
+            </div>
+            <p id="online-status">혼자 테스트하려면 바로 AI 경기를 시작하세요.</p>
+          </section>
+          <div id="character-picker">
+            <div id="character-grid"></div>
+            <article id="character-detail"></article>
+          </div>
+          <button id="start-button" type="button">AI 경기 시작</button>
+        </section>
+        <div id="touch-layer" aria-label="Touch controls">
+          <div class="move-zone">
+            <button id="left-button" class="touch-button direction" type="button">왼쪽</button>
+            <button id="right-button" class="touch-button direction" type="button">오른쪽</button>
+          </div>
+          <div class="action-zone">
+            <button id="jump-button" class="touch-button" type="button">점프</button>
+            <button id="skill-button" class="touch-button primary" type="button">스킬</button>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
