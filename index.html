@@ -24,7 +24,7 @@
             II
           </button>
         </div>
-        <section id="character-select" class="panel" aria-label="Character select">
+        <section id="character-select" class="panel" aria-label="Game lobby">
           <h1>무한도전 6인 배구</h1>
           <section id="online-panel" aria-label="Online room">
             <div class="room-actions">
@@ -40,19 +40,22 @@
                 />
                 <button id="join-room-button" type="button">참가</button>
               </div>
+              <button id="practice-button" class="secondary-room-button" type="button">
+                AI 연습
+              </button>
             </div>
             <div class="room-code-box">
               <span>내 방 코드</span>
               <strong id="room-code-value">------</strong>
               <button id="copy-room-button" type="button" disabled>복사</button>
             </div>
-            <p id="online-status">혼자 테스트하려면 바로 AI 경기를 시작하세요.</p>
+            <p id="online-status">방을 만들거나 친구에게 받은 코드를 입력하세요.</p>
           </section>
-          <div id="character-picker">
+          <div id="character-picker" class="hidden">
             <div id="character-grid"></div>
             <article id="character-detail"></article>
           </div>
-          <button id="start-button" type="button">AI 경기 시작</button>
+          <button id="start-button" class="hidden" type="button">경기 시작</button>
         </section>
         <div id="touch-layer" aria-label="Touch controls">
           <div class="move-zone">

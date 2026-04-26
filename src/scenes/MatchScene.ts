@@ -29,8 +29,10 @@ export class MatchScene extends Phaser.Scene {
   private p2NameElement!: HTMLElement;
   private skillButton!: HTMLButtonElement;
   private selectPanel!: HTMLElement;
+  private characterPicker!: HTMLElement;
   private detailPanel!: HTMLElement;
   private startButton!: HTMLButtonElement;
+  private practiceButton!: HTMLButtonElement;
   private onlineStatus!: HTMLElement;
   private roomCodeValue!: HTMLElement;
   private roomCodeInput!: HTMLInputElement;
@@ -49,8 +51,10 @@ export class MatchScene extends Phaser.Scene {
     this.p2NameElement = requiredElement("p2-name");
     this.skillButton = requiredElement("skill-button") as HTMLButtonElement;
     this.selectPanel = requiredElement("character-select");
+    this.characterPicker = requiredElement("character-picker");
     this.detailPanel = requiredElement("character-detail");
     this.startButton = requiredElement("start-button") as HTMLButtonElement;
+    this.practiceButton = requiredElement("practice-button") as HTMLButtonElement;
     this.onlineStatus = requiredElement("online-status");
     this.roomCodeValue = requiredElement("room-code-value");
     this.roomCodeInput = requiredElement("room-code-input") as HTMLInputElement;
@@ -163,6 +167,7 @@ export class MatchScene extends Phaser.Scene {
   private setupOnlineControls() {
     this.createRoomButton.addEventListener("click", () => {
       this.network.createRoom();
+      this.showCharacterStep();
       this.onlineStatus.textContent = "방을 준비하는 중입니다...";
       this.startButton.textContent = "친구 대기 중";
       this.startButton.disabled = true;
@@ -178,6 +183,15 @@ export class MatchScene extends Phaser.Scene {
       this.startButton.textContent = "방장 대기";
       this.startButton.disabled = true;
     });
+    this.practiceButton.addEventListener("click", () => {
+      this.network.destroy();
+      this.roomCodeValue.textContent = "------";
+      this.copyRoomButton.disabled = true;
+      this.showCharacterStep();
+      this.onlineStatus.textContent = "캐릭터를 고른 뒤 AI 경기를 시작하세요.";
+      this.startButton.textContent = "AI 경기 시작";
+      this.startButton.disabled = false;
+    });
     this.roomCodeInput.addEventListener("input", () => {
       this.roomCodeInput.value = normalizeRoomCode(this.roomCodeInput.value);
     });
@@ -186,6 +200,11 @@ export class MatchScene extends Phaser.Scene {
       await navigator.clipboard?.writeText(this.network.roomCode);
       this.onlineStatus.textContent = "방 코드를 복사했습니다.";
     });
+  }
+
+  private showCharacterStep() {
+    this.characterPicker.classList.remove("hidden");
+    this.startButton.classList.remove("hidden");
   }
 
   private renderCharacterDetail(characterId: string) {
@@ -266,7 +285,8 @@ export class MatchScene extends Phaser.Scene {
         this.startButton.textContent = "온라인 경기 시작";
         this.startButton.disabled = false;
       } else {
-        this.onlineStatus.textContent = "방에 접속했습니다. 방장이 시작할 때까지 기다리세요.";
+        this.showCharacterStep();
+        this.onlineStatus.textContent = "방에 접속했습니다. 캐릭터를 고르고 방장을 기다리세요.";
         this.startButton.textContent = "방장 대기";
         this.startButton.disabled = true;
         this.network.sendGuestCharacter(this.selectedCharacterId);

@@ -138,6 +138,10 @@ button {
   display: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .panel h1 {
   margin: 0;
   padding-top: 18px;
@@ -634,6 +638,11 @@ button {
 #online-panel button {
   background: rgba(255, 202, 69, 0.92);
   color: #182629;
+}
+
+#online-panel .secondary-room-button {
+  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.86);
 }
 
 #online-panel button:disabled {
