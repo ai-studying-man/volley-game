@@ -7,7 +7,9 @@ import { normalizeRoomCode, RoomClient, type RoomEvent } from "../network/RoomCl
 import type { MatchSnapshot, PlayerInput, PlayerSimState } from "../game/types";
 
 const KAKAO_JAVASCRIPT_KEY = "af315e49ffb6ac769e1e671ce53fa57d";
+const KAKAO_SDK_URL = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js";
 const emptyInput: PlayerInput = { x: 0, y: 0, skill: false, dive: 0 };
+let kakaoSdkPromise: Promise<KakaoSdk | undefined> | undefined;
 
 export class MatchScene extends Phaser.Scene {
   private simulation!: VolleySimulation;
@@ -386,18 +388,14 @@ export class MatchScene extends Phaser.Scene {
 
   private initializeKakaoShare() {
     const kakao = window.Kakao;
-    if (!kakao?.Share?.sendDefault) {
-      this.kakaoShareButton.disabled = true;
-      return;
-    }
-    if (!kakao.isInitialized()) {
+    if (kakao && !kakao.isInitialized()) {
       kakao.init(KAKAO_JAVASCRIPT_KEY);
     }
   }
 
   private async shareRoomWithKakao(roomCode: string) {
-    const kakao = window.Kakao;
     const shareUrl = createRoomUrl(roomCode);
+    const kakao = await loadKakaoSdk();
     if (!kakao?.Share?.sendDefault) {
       await navigator.clipboard?.writeText(createRoomShareText(roomCode));
       this.onlineStatus.textContent = "카카오 SDK를 불러오지 못해 초대 링크를 복사했습니다.";
@@ -447,6 +445,32 @@ function createRoomUrl(roomCode: string) {
   const url = new URL(window.location.href);
   url.searchParams.set("room", roomCode);
   return url.toString();
+}
+
+function loadKakaoSdk() {
+  if (window.Kakao) {
+    return Promise.resolve(window.Kakao);
+  }
+  if (kakaoSdkPromise) {
+    return kakaoSdkPromise;
+  }
+  kakaoSdkPromise = new Promise((resolve) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${KAKAO_SDK_URL}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.Kakao), { once: true });
+      existingScript.addEventListener("error", () => resolve(undefined), { once: true });
+      window.setTimeout(() => resolve(window.Kakao), 1200);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = KAKAO_SDK_URL;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.onload = () => resolve(window.Kakao);
+    script.onerror = () => resolve(undefined);
+    document.head.appendChild(script);
+  });
+  return kakaoSdkPromise;
 }
 
 function getSkillDescription(skillId: string) {
