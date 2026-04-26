@@ -8,8 +8,10 @@ import type {
   PlayerSimState,
 } from "./types";
 
-const emptyInput: PlayerInput = { x: 0, y: 0, skill: false };
+const emptyInput: PlayerInput = { x: 0, y: 0, skill: false, dive: 0 };
 const SKILL_COOLDOWN_FRAMES = WORLD.fixedFps * 5;
+const DIVE_FRAMES = 14;
+const DIVE_SPEED = 11.5;
 
 export class VolleySimulation {
   private players: [PlayerSimState, PlayerSimState];
@@ -114,6 +116,7 @@ export class VolleySimulation {
       x: x as -1 | 0 | 1,
       y: shouldJump ? -1 : close && ball.y < player.y ? -1 : 0,
       skill: false,
+      dive: 0,
     };
   }
 
@@ -126,6 +129,8 @@ export class VolleySimulation {
       state: "idle",
       frame: 0,
       didCollideBall: false,
+      diveFrames: 0,
+      diveDirection: 0,
       characterId,
       shieldFrames: 0,
       doubleHopAvailable: true,
@@ -217,18 +222,38 @@ export class VolleySimulation {
     player.shieldFrames = Math.max(0, player.shieldFrames - 1);
     player.skillCooldownFrames = Math.max(0, player.skillCooldownFrames - 1);
     player.skillFlashFrames = Math.max(0, player.skillFlashFrames - 1);
+    if (player.diveFrames > 0) {
+      player.diveFrames -= 1;
+    }
 
     const character = getCharacter(player.characterId);
     const speedBonus = (character.stats.speed - 3) * 0.7;
     const jumpBonus = (character.stats.jump - 3) * 1.5;
-    let vx = input.x * (PLAYER.moveSpeed + speedBonus);
+    if (
+      input.dive !== 0 &&
+      player.y === PLAYER.groundY &&
+      player.state !== "dive" &&
+      player.state !== "win" &&
+      player.state !== "lose"
+    ) {
+      player.state = "dive";
+      player.frame = 0;
+      player.diveFrames = DIVE_FRAMES;
+      player.diveDirection = input.dive;
+      player.skillFlashFrames = 5;
+    }
+
+    const isDiving = player.state === "dive" && player.diveFrames > 0;
+    let vx = isDiving
+      ? player.diveDirection * DIVE_SPEED
+      : input.x * (PLAYER.moveSpeed + speedBonus);
     player.x += vx;
 
     const minX = player.side === "left" ? WORLD.playerHalf : WORLD.netX + WORLD.playerHalf;
     const maxX = player.side === "left" ? WORLD.netX - WORLD.playerHalf : WORLD.width - WORLD.playerHalf;
     player.x = clamp(player.x, minX, maxX);
 
-    if (input.y === -1 && player.y === PLAYER.groundY) {
+    if (input.y === -1 && player.y === PLAYER.groundY && !isDiving) {
       player.vy = PLAYER.jumpVelocity - jumpBonus;
       player.state = "jump";
       player.frame = 0;
@@ -241,8 +266,11 @@ export class VolleySimulation {
     } else {
       player.y = PLAYER.groundY;
       player.vy = 0;
-      if (player.state !== "win" && player.state !== "lose") {
+      if (player.state === "dive" && player.diveFrames > 0) {
+        player.state = "dive";
+      } else if (player.state !== "win" && player.state !== "lose") {
         player.state = "idle";
+        player.diveDirection = 0;
       }
       player.doubleHopAvailable = true;
     }
@@ -325,8 +353,11 @@ export class VolleySimulation {
     const dx = ball.x - player.x;
     const dy = ball.y - player.y;
     const shieldBonus = player.shieldFrames > 0 ? 16 : 0;
-    const hitHalf = WORLD.playerHalf + defenseBonus + shieldBonus;
-    const colliding = Math.abs(dx) <= hitHalf && Math.abs(dy) <= hitHalf;
+    const diveBonusX = player.state === "dive" ? 18 : 0;
+    const diveBonusY = player.state === "dive" ? -8 : 0;
+    const hitHalfX = WORLD.playerHalf + defenseBonus + shieldBonus + diveBonusX;
+    const hitHalfY = WORLD.playerHalf + defenseBonus + shieldBonus + diveBonusY;
+    const colliding = Math.abs(dx) <= hitHalfX && Math.abs(dy) <= hitHalfY;
 
     if (!colliding) {
       player.didCollideBall = false;
@@ -342,14 +373,20 @@ export class VolleySimulation {
     ball.vy = Math.min(BALL.minHitVelocityY, -Math.abs(ball.vy));
     ball.power = false;
 
-    if (player.state === "jump" || player.state === "power" || player.shieldFrames > 0) {
+    if (player.state === "jump" || player.state === "power" || player.state === "dive" || player.shieldFrames > 0) {
       const direction = ball.x < WORLD.netX ? 1 : -1;
       const shieldPowerBonus = player.shieldFrames > 0 ? 5 : 0;
       const isDirectionalPowerHit = player.state === "power";
-      ball.vx = direction * ((Math.abs(input.x) + 1) * (isDirectionalPowerHit ? 10 : 8) + powerBonus + shieldPowerBonus);
+      const isDiveReceive = player.state === "dive";
+      if (isDiveReceive) {
+        ball.vx = (player.diveDirection || direction) * (10 + powerBonus * 0.45);
+        ball.vy = -10;
+      } else {
+        ball.vx = direction * ((Math.abs(input.x) + 1) * (isDirectionalPowerHit ? 10 : 8) + powerBonus + shieldPowerBonus);
+      }
       if (isDirectionalPowerHit) {
         ball.vy = input.y === 1 ? 16 : input.x !== 0 ? 8 : -10;
-      } else {
+      } else if (!isDiveReceive) {
         ball.vy = input.y === 1 ? 13 : input.y === -1 ? -14 : -12;
       }
       ball.power = true;

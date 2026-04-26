@@ -660,7 +660,7 @@ button {
 
 .room-code-box {
   display: grid;
-  grid-template-columns: auto 1fr 64px;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -679,6 +679,23 @@ button {
   font-size: 22px;
   letter-spacing: 2px;
   text-align: center;
+  white-space: nowrap;
+}
+
+#copy-room-button,
+#kakao-share-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+#copy-room-button {
+  grid-column: 1;
+}
+
+#kakao-share-button {
+  grid-column: 2;
+  background: #fee500;
+  color: #191600;
 }
 
 #online-status {

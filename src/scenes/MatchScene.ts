@@ -6,7 +6,8 @@ import { InputManager } from "../input/InputManager";
 import { normalizeRoomCode, RoomClient, type RoomEvent } from "../network/RoomClient";
 import type { MatchSnapshot, PlayerInput, PlayerSimState } from "../game/types";
 
-const emptyInput: PlayerInput = { x: 0, y: 0, skill: false };
+const KAKAO_JAVASCRIPT_KEY = "af315e49ffb6ac769e1e671ce53fa57d";
+const emptyInput: PlayerInput = { x: 0, y: 0, skill: false, dive: 0 };
 
 export class MatchScene extends Phaser.Scene {
   private simulation!: VolleySimulation;
@@ -39,6 +40,7 @@ export class MatchScene extends Phaser.Scene {
   private createRoomButton!: HTMLButtonElement;
   private joinRoomButton!: HTMLButtonElement;
   private copyRoomButton!: HTMLButtonElement;
+  private kakaoShareButton!: HTMLButtonElement;
   private queuedSkill = false;
 
   constructor() {
@@ -61,6 +63,7 @@ export class MatchScene extends Phaser.Scene {
     this.createRoomButton = requiredElement("create-room-button") as HTMLButtonElement;
     this.joinRoomButton = requiredElement("join-room-button") as HTMLButtonElement;
     this.copyRoomButton = requiredElement("copy-room-button") as HTMLButtonElement;
+    this.kakaoShareButton = requiredElement("kakao-share-button") as HTMLButtonElement;
 
     this.setupCharacterSelect();
     this.setupOnlineControls();
@@ -171,6 +174,7 @@ export class MatchScene extends Phaser.Scene {
       this.onlineStatus.textContent = "방을 준비하는 중입니다...";
       this.startButton.textContent = "친구 대기 중";
       this.startButton.disabled = true;
+      this.kakaoShareButton.disabled = true;
     });
     this.joinRoomButton.addEventListener("click", () => {
       const roomCode = normalizeRoomCode(this.roomCodeInput.value);
@@ -187,6 +191,7 @@ export class MatchScene extends Phaser.Scene {
       this.network.destroy();
       this.roomCodeValue.textContent = "------";
       this.copyRoomButton.disabled = true;
+      this.kakaoShareButton.disabled = true;
       this.showCharacterStep();
       this.onlineStatus.textContent = "캐릭터를 고른 뒤 AI 경기를 시작하세요.";
       this.startButton.textContent = "AI 경기 시작";
@@ -197,9 +202,19 @@ export class MatchScene extends Phaser.Scene {
     });
     this.copyRoomButton.addEventListener("click", async () => {
       if (!this.network.roomCode) return;
-      await navigator.clipboard?.writeText(this.network.roomCode);
-      this.onlineStatus.textContent = "방 코드를 복사했습니다.";
+      await navigator.clipboard?.writeText(createRoomShareText(this.network.roomCode));
+      this.onlineStatus.textContent = "초대 링크와 방 코드를 복사했습니다.";
     });
+    this.kakaoShareButton.addEventListener("click", async () => {
+      if (!this.network.roomCode) return;
+      await this.shareRoomWithKakao(this.network.roomCode);
+    });
+    const sharedRoomCode = normalizeRoomCode(new URLSearchParams(window.location.search).get("room") ?? "");
+    if (sharedRoomCode.length === 6) {
+      this.roomCodeInput.value = sharedRoomCode;
+      this.onlineStatus.textContent = "공유받은 방 코드가 입력되었습니다. 참가를 눌러 접속하세요.";
+    }
+    this.initializeKakaoShare();
   }
 
   private showCharacterStep() {
@@ -278,6 +293,7 @@ export class MatchScene extends Phaser.Scene {
     if (event.type === "open") {
       this.roomCodeValue.textContent = event.roomCode;
       this.copyRoomButton.disabled = false;
+      this.kakaoShareButton.disabled = false;
       this.onlineStatus.textContent = "방 코드를 친구에게 공유하세요.";
     } else if (event.type === "connected") {
       if (this.network.role === "host") {
@@ -351,7 +367,7 @@ export class MatchScene extends Phaser.Scene {
     sprite.setPosition(player.x, player.y);
     sprite.setTexture(`character-${player.characterId}`);
     sprite.setScale(player.shieldFrames > 0 ? 1.08 : 1);
-    sprite.setAngle(0);
+    sprite.setAngle(player.state === "dive" ? (player.diveDirection || 1) * 72 : 0);
     sprite.setFlipX(player.side === "right");
     if (player.skillFlashFrames > 0) {
       sprite.setTint(0xfff0a8);
@@ -366,6 +382,44 @@ export class MatchScene extends Phaser.Scene {
     this.p1NameElement.textContent = getCharacter(leftCharacterId).name;
     this.p2NameElement.textContent = getCharacter(rightCharacterId).name;
     this.skillButton.textContent = getCharacter(this.selectedCharacterId).skill.name;
+  }
+
+  private initializeKakaoShare() {
+    const kakao = window.Kakao;
+    if (!kakao?.Share?.sendDefault) {
+      this.kakaoShareButton.disabled = true;
+      return;
+    }
+    if (!kakao.isInitialized()) {
+      kakao.init(KAKAO_JAVASCRIPT_KEY);
+    }
+  }
+
+  private async shareRoomWithKakao(roomCode: string) {
+    const kakao = window.Kakao;
+    const shareUrl = createRoomUrl(roomCode);
+    if (!kakao?.Share?.sendDefault) {
+      await navigator.clipboard?.writeText(createRoomShareText(roomCode));
+      this.onlineStatus.textContent = "카카오 SDK를 불러오지 못해 초대 링크를 복사했습니다.";
+      return;
+    }
+    try {
+      if (!kakao.isInitialized()) {
+        kakao.init(KAKAO_JAVASCRIPT_KEY);
+      }
+      kakao.Share.sendDefault({
+        objectType: "text",
+        text: `무한도전 6인 배구 같이 하기\n방 코드: ${roomCode}`,
+        link: {
+          mobileWebUrl: shareUrl,
+          webUrl: shareUrl,
+        },
+        buttonTitle: "방 참가하기",
+      });
+    } catch {
+      await navigator.clipboard?.writeText(createRoomShareText(roomCode));
+      this.onlineStatus.textContent = "카카오톡 공유를 열지 못해 초대 링크를 복사했습니다.";
+    }
   }
 }
 
@@ -383,6 +437,16 @@ function toHex(value: number) {
 
 function formatStars(value: number) {
   return "★".repeat(value) + "☆".repeat(5 - value);
+}
+
+function createRoomShareText(roomCode: string) {
+  return `무한도전 6인 배구 같이 하기\n${createRoomUrl(roomCode)}\n방 코드: ${roomCode}`;
+}
+
+function createRoomUrl(roomCode: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", roomCode);
+  return url.toString();
 }
 
 function getSkillDescription(skillId: string) {

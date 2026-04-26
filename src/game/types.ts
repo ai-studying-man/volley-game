@@ -4,6 +4,7 @@ export type PlayerActionState =
   | "idle"
   | "jump"
   | "power"
+  | "dive"
   | "win"
   | "lose";
 
@@ -11,6 +12,7 @@ export type PlayerInput = {
   x: -1 | 0 | 1;
   y: -1 | 0 | 1;
   skill: boolean;
+  dive: -1 | 0 | 1;
 };
 
 export type PlayerSimState = {
@@ -21,6 +23,8 @@ export type PlayerSimState = {
   state: PlayerActionState;
   frame: number;
   didCollideBall: boolean;
+  diveFrames: number;
+  diveDirection: -1 | 0 | 1;
   characterId: string;
   shieldFrames: number;
   doubleHopAvailable: boolean;

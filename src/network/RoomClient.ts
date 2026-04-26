@@ -27,6 +27,9 @@ export class RoomClient {
   connected = false;
   private peer?: Peer;
   private connection?: DataConnection;
+  private joinRetryTimer?: number;
+  private joinAttempt = 0;
+  private pendingJoinPeerId = "";
   private onEvent: (event: RoomEvent) => void;
 
   constructor(onEvent: (event: RoomEvent) => void) {
@@ -39,6 +42,12 @@ export class RoomClient {
     this.roomCode = createRoomCode();
     this.peer = new Peer(roomCodeToPeerId(this.roomCode), {
       debug: 1,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+        ],
+      },
     });
     this.peer.on("open", () => {
       this.onEvent({ type: "open", roomCode: this.roomCode });
@@ -59,14 +68,24 @@ export class RoomClient {
     this.destroy();
     this.role = "guest";
     this.roomCode = normalizeRoomCode(roomCode);
+    this.pendingJoinPeerId = roomCodeToPeerId(this.roomCode);
     this.peer = new Peer({
       debug: 1,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+        ],
+      },
     });
     this.peer.on("open", () => {
-      if (!this.peer) return;
-      this.bindConnection(this.peer.connect(roomCodeToPeerId(this.roomCode), { reliable: true }));
+      this.connectToHost();
     });
     this.peer.on("error", (error) => {
+      if (this.shouldRetryJoin(error)) {
+        this.scheduleJoinRetry();
+        return;
+      }
       this.onEvent({ type: "error", message: getErrorMessage(error) });
     });
   }
@@ -88,6 +107,10 @@ export class RoomClient {
   }
 
   destroy() {
+    if (this.joinRetryTimer !== undefined) {
+      window.clearTimeout(this.joinRetryTimer);
+      this.joinRetryTimer = undefined;
+    }
     this.connection?.close();
     this.peer?.destroy();
     this.connection = undefined;
@@ -95,24 +118,74 @@ export class RoomClient {
     this.connected = false;
     this.roomCode = "";
     this.role = "offline";
+    this.joinAttempt = 0;
+    this.pendingJoinPeerId = "";
   }
 
   private bindConnection(connection: DataConnection) {
     this.connection = connection;
     connection.on("open", () => {
+      if (this.joinRetryTimer !== undefined) {
+        window.clearTimeout(this.joinRetryTimer);
+        this.joinRetryTimer = undefined;
+      }
       this.connected = true;
       this.onEvent({ type: "connected" });
     });
     connection.on("close", () => {
+      const wasConnected = this.connected;
       this.connected = false;
+      if (!wasConnected && this.role === "guest") {
+        this.scheduleJoinRetry();
+        return;
+      }
       this.onEvent({ type: "disconnected" });
     });
     connection.on("error", (error) => {
+      if (this.shouldRetryJoin(error)) {
+        this.scheduleJoinRetry();
+        return;
+      }
       this.onEvent({ type: "error", message: getErrorMessage(error) });
     });
     connection.on("data", (data) => {
       this.handleMessage(data);
     });
+  }
+
+  private connectToHost() {
+    if (!this.peer || this.role !== "guest" || this.connected || !this.pendingJoinPeerId) return;
+    this.joinAttempt += 1;
+    this.connection?.close();
+    this.bindConnection(this.peer.connect(this.pendingJoinPeerId, { reliable: true }));
+  }
+
+  private scheduleJoinRetry() {
+    if (this.role !== "guest" || this.connected || this.joinRetryTimer !== undefined) return;
+    if (this.joinAttempt >= 6) {
+      this.onEvent({
+        type: "error",
+        message: "방을 찾지 못했습니다. 방장이 같은 화면을 켜 둔 상태인지 확인한 뒤 다시 참가해 주세요.",
+      });
+      return;
+    }
+    this.onEvent({ type: "error", message: "방을 찾는 중입니다. 잠시 후 다시 연결합니다..." });
+    const delay = 700 + this.joinAttempt * 450;
+    this.joinRetryTimer = window.setTimeout(() => {
+      this.joinRetryTimer = undefined;
+      this.connectToHost();
+    }, delay);
+  }
+
+  private shouldRetryJoin(error: unknown) {
+    if (this.role !== "guest" || this.connected) return false;
+    const message = getErrorMessage(error).toLowerCase();
+    return (
+      message.includes("could not connect") ||
+      message.includes("peer-unavailable") ||
+      message.includes("not found") ||
+      message.includes("lost connection")
+    );
   }
 
   private handleMessage(data: unknown) {
@@ -187,7 +260,8 @@ function isPlayerInput(value: unknown): value is PlayerInput {
   return (
     (value.x === -1 || value.x === 0 || value.x === 1) &&
     (value.y === -1 || value.y === 0 || value.y === 1) &&
-    typeof value.skill === "boolean"
+    typeof value.skill === "boolean" &&
+    (value.dive === -1 || value.dive === 0 || value.dive === 1)
   );
 }
 
